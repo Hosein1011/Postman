@@ -5,8 +5,9 @@ import { useApp } from '../context/AppContext';
 import type { HttpMethod, Param, Header } from '../types';
 import { isValidHttpUrl } from '../lib/validators';
 
+
 export default function RequestBar() {
-  const { tabs, activeTabId, updateActiveTabRequest, updateActiveTabResponse, clearActiveTabFields } = useApp();
+  const { tabs, activeTabId, updateActiveTabRequest, updateActiveTabResponse, clearActiveTabFields, addHistory } = useApp();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const request = activeTab?.request;
@@ -70,69 +71,71 @@ export default function RequestBar() {
 
   // ─── Real Send Handler ─────────────────────
   const handleSend = async () => {
-    if (!request) return;
+  if (!request) return;
 
-    // Validation
-    if (!request.url.trim()) {
-      updateActiveTabResponse(() => ({
-        status: null, statusText: '', data: null, loading: false, error: 'URL cannot be empty.',
-      }));
-      return;
+  // Validation (same as before)
+  if (!request.url.trim()) {
+    updateActiveTabResponse(() => ({
+      status: null, statusText: '', data: null, loading: false, error: 'URL cannot be empty.',
+    }));
+    return;
+  }
+  if (!isValidHttpUrl(request.url)) {
+    updateActiveTabResponse(() => ({
+      status: null, statusText: '', data: null, loading: false, error: 'Invalid URL. Must start with http:// or https://',
+    }));
+    return;
+  }
+
+  // Set loading
+  updateActiveTabResponse(() => ({ status: null, statusText: '', data: null, loading: true, error: null }));
+
+  try {
+    // Build headers
+    const headers: Record<string, string> = {};
+    request.headers.forEach((h) => {
+      if (h.enabled && h.key.trim()) headers[h.key.trim()] = h.value;
+    });
+
+    // Query string
+    const enabledParams = request.params.filter((p) => p.enabled && p.key.trim());
+    const queryString = enabledParams
+      .map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
+      .join('&');
+    const fullUrl = queryString ? `${request.url}?${queryString}` : request.url;
+
+    const options: RequestInit = {
+      method: request.method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+    };
+
+    if (['POST', 'PUT', 'PATCH'].includes(request.method) && request.body) {
+      options.body = request.body;
     }
-    if (!isValidHttpUrl(request.url)) {
-      updateActiveTabResponse(() => ({
-        status: null, statusText: '', data: null, loading: false, error: 'Invalid URL. Must start with http:// or https://',
-      }));
-      return;
-    }
 
-    // Set loading
-    updateActiveTabResponse(() => ({ status: null, statusText: '', data: null, loading: true, error: null }));
+    const response = await fetch(fullUrl, options);
+    const contentType = response.headers.get('content-type');
+    const data = contentType?.includes('application/json')
+      ? await response.json()
+      : await response.text();
 
-    try {
-      // Build headers
-      const headers: Record<string, string> = {};
-      request.headers.forEach((h) => {
-        if (h.enabled && h.key.trim()) headers[h.key.trim()] = h.value;
-      });
+    updateActiveTabResponse(() => ({
+      status: response.status,
+      statusText: response.statusText,
+      data,
+      loading: false,
+      error: null,
+    }));
 
-      // Query string
-      const enabledParams = request.params.filter((p) => p.enabled && p.key.trim());
-      const queryString = enabledParams
-        .map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
-        .join('&');
-      const fullUrl = queryString ? `${request.url}?${queryString}` : request.url;
-
-      const options: RequestInit = {
-        method: request.method,
-        headers: { 'Content-Type': 'application/json', ...headers },
-      };
-
-      if (['POST', 'PUT', 'PATCH'].includes(request.method) && request.body) {
-        options.body = request.body;
-      }
-
-      const response = await fetch(fullUrl, options);
-      const contentType = response.headers.get('content-type');
-      const data = contentType?.includes('application/json')
-        ? await response.json()
-        : await response.text();
-
-      updateActiveTabResponse(() => ({
-        status: response.status,
-        statusText: response.statusText,
-        data,
-        loading: false,
-        error: null,
-      }));
-    } catch (err: any) {
-      updateActiveTabResponse(() => ({
-        status: null, statusText: '', data: null, loading: false,
-        error: err.message || 'Network error. Please check your connection.',
-      }));
-    }
-  };
-
+    // ✅ Add this line to save the request to history
+    addHistory(fullUrl, request.method);
+  } catch (err: any) {
+    updateActiveTabResponse(() => ({
+      status: null, statusText: '', data: null, loading: false,
+      error: err.message || 'Network error. Please check your connection.',
+    }));
+  }
+};
   const showBody = ['POST', 'PUT', 'PATCH'].includes(request.method);
 
   // ─── Render ────────────────────────────────

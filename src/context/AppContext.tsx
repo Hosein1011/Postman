@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Tab, Collection, HistoryItem, RequestConfig } from '../types';
+import { Tab, Collection, CollectionItem, HistoryItem, RequestConfig } from '../types';
 
 interface AppContextType {
   tabs: Tab[];
@@ -17,7 +17,12 @@ interface AppContextType {
   updateActiveTabRequest: (updater: (prev: RequestConfig) => RequestConfig) => void;
   updateActiveTabResponse: (updater: (prev: Tab['response']) => Tab['response']) => void;
   clearActiveTabFields: () => void;
-  setCollections: (collections: Collection[]) => void;      // ✔️ already in interface
+  setCollections: (collections: Collection[]) => void;
+  saveCurrentTabsAsCollection: () => void;
+  deleteCollection: (id: string) => void;
+  loadCollection: (collection: Collection) => void;
+  addHistory: (url: string, method: string) => void;
+  clearHistory: () => void;
 }
 
 const defaultRequest: RequestConfig = {
@@ -110,6 +115,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updateActiveTabResponse(() => ({ status: null, statusText: '', data: null, loading: false, error: null }));
   };
 
+  // ─── Collections (matching your Collection / CollectionItem types) ─────
+  const saveCurrentTabsAsCollection = () => {
+    if (tabs.length === 0) return;
+    const collectionItems: CollectionItem[] = tabs.map((tab) => ({
+      id: crypto.randomUUID(),
+      name: tab.name,
+      ...tab.request,   // spreads url, method, headers, params, body
+    }));
+    const newCollection: Collection = {
+      id: crypto.randomUUID(),
+      name: `Collection ${collections.length + 1}`,
+      requests: collectionItems,
+    };
+    const updated = [...collections, newCollection];
+    setCollections(updated);
+    localStorage.setItem('portman_collections', JSON.stringify(updated));
+  };
+
+  const deleteCollection = (id: string) => {
+    const updated = collections.filter((c) => c.id !== id);
+    setCollections(updated);
+    localStorage.setItem('portman_collections', JSON.stringify(updated));
+  };
+
+  const loadCollection = (collection: Collection) => {
+    const newTabs: Tab[] = collection.requests.map((item) => ({
+      id: crypto.randomUUID(),
+      name: item.name,
+      request: {
+        url: item.url,
+        method: item.method,
+        headers: item.headers,
+        params: item.params,
+        body: item.body,
+      },
+      response: { status: null, statusText: '', data: null, loading: false, error: null },
+    }));
+    setTabs(newTabs);
+    setActiveTabId(newTabs[0]?.id ?? null);
+  };
+
+  // ─── History (matching your HistoryItem type) ─────────────────────────
+  const addHistory = (url: string, method: string) => {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (!activeTab) return;
+    const newHistory: HistoryItem = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      request: { ...activeTab.request },   // deep copy
+      responseStatus: activeTab.response.status,
+    };
+    const updated = [newHistory, ...history].slice(0, 50);
+    setHistory(updated);
+    localStorage.setItem('portman_history', JSON.stringify(updated));
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem('portman_history');
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -125,11 +191,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateActiveTabRequest,
         updateActiveTabResponse,
         clearActiveTabFields,
-        setCollections,   // ✔️ added here
+        setCollections,
+        saveCurrentTabsAsCollection,
+        deleteCollection,
+        loadCollection,
+        addHistory,
+        clearHistory,
       }}
     >
-      {/* 🔹 Updated to use the custom palette */}
-      <div className={darkMode ? 'dark text-text-primary bg-deep-950 min-h-screen flex flex-col' : 'text-black bg-white min-h-screen flex flex-col'}>
+      <div
+        className={
+          darkMode
+            ? 'dark text-text-primary bg-deep-950 min-h-screen flex flex-col'
+            : 'text-black bg-white min-h-screen flex flex-col'
+        }
+      >
         {children}
       </div>
     </AppContext.Provider>

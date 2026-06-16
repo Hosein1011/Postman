@@ -8,54 +8,74 @@ export default function ResponsePanel() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const response = activeTab?.response;
 
-  if (!response) {
+  if (!activeTab || !response) {
     return (
-      <div className="bg-deep-950 border-t border-teal/20 p-6 text-text-muted text-sm">
-        Send a request to see the response.
-      </div>
-    );
-  }
-
-  const { status, statusText, data, loading, error } = response;
-
-  if (loading) {
-    return (
-      <div className="bg-deep-950 border-t border-teal/20 p-6 text-text-muted text-sm flex items-center gap-2">
-        <span className="animate-spin">⏳</span> Sending request...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-deep-950 border-t border-teal/20 p-6">
-        <div className="flex items-center gap-2 text-red-400 font-semibold mb-2">
-          <span>❌ Error</span>
+      <div className="flex-1 p-6 text-center text-text-muted text-sm flex items-center justify-center border-t border-teal/20">
+        <div className="flex flex-col items-center gap-2">
+          <h2 className="text-xl font-semibold text-text-primary">Welcome to Portman! 🚀</h2>
+          <p>Your dark blue gradient theme is active.</p>
         </div>
-        <pre className="text-red-300 text-sm whitespace-pre-wrap">{error}</pre>
       </div>
     );
   }
 
+  // Loading state
+  if (response.loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center border-t border-teal/20">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-mint"></div>
+          <span className="text-sm text-text-muted">Sending request...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (response.error) {
+    return (
+      <div className="flex-1 p-6 border-t border-teal/20">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-red-400 font-bold">Error</span>
+            </div>
+            <p className="text-sm text-red-300 font-mono">{response.error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Success: show status and data
   const statusColor =
-    status && status >= 200 && status < 300
-      ? 'text-mint'
-      : status && status >= 400
-      ? 'text-red-400'
-      : 'text-yellow-400';
+    response.status && response.status >= 200 && response.status < 300
+      ? 'text-green-400'
+      : 'text-red-400';
+
+  const formattedData = response.data
+    ? JSON.stringify(response.data, null, 2)
+    : '';
 
   return (
-    <div className="bg-deep-950 border-t border-teal/20 p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <span className={`font-bold text-lg ${statusColor}`}>
-          {status} {statusText}
-        </span>
-      </div>
-      <div>
-        <h3 className="text-sm font-semibold text-text-muted mb-2">Response Body</h3>
-        <pre className="bg-deep-900 rounded-lg p-4 text-sm text-text-primary overflow-x-auto max-h-96 font-mono whitespace-pre-wrap">
-          {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
-        </pre>
+    <div className="flex-1 p-6 border-t border-teal/20 overflow-y-auto">
+      <div className="max-w-3xl mx-auto space-y-4">
+        {/* Status */}
+        <div className="flex items-center gap-3">
+          <span className={`text-lg font-bold ${statusColor}`}>
+            {response.status} {response.statusText}
+          </span>
+          <span className="text-xs text-text-muted bg-deep-800 px-2 py-0.5 rounded">
+            Response
+          </span>
+        </div>
+
+        {/* Data */}
+        <div className="bg-deep-900 border border-teal/20 rounded-lg p-4">
+          <pre className="text-sm text-text-primary font-mono whitespace-pre-wrap break-all">
+            {formattedData || 'No response data'}
+          </pre>
+        </div>
       </div>
     </div>
   );
